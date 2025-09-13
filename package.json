@@ -1,0 +1,117 @@
+{
+  "name": "react-component-visualizer",
+  "author": "Stuart Harding <sturayharding@gmail.com>",
+  "displayName": "React Component Visualizer",
+  "description": "Visualize React component relationships, state flow, props, and context with interactive D3 diagrams",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "react",
+    "component",
+    "state",
+    "props",
+    "context",
+    "visualization",
+    "diagram"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "reactVisualizer.showDiagram",
+        "title": "Show React Component Diagram",
+        "category": "React Visualizer"
+      },
+      {
+        "command": "reactVisualizer.analyzeCurrent",
+        "title": "Analyze Current File",
+        "category": "React Visualizer"
+      },
+      {
+        "command": "reactVisualizer.analyzeWorkspace",
+        "title": "Analyze Entire Workspace",
+        "category": "React Visualizer"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "reactVisualizer.showDiagram",
+          "when": "resourceExtname =~ /\\.(js|jsx|ts|tsx)$/",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "reactVisualizer.analyzeCurrent",
+          "when": "resourceExtname =~ /\\.(js|jsx|ts|tsx)$/",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "reactVisualizer.showDiagram",
+          "when": "workspaceHasReactFiles"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "React Visualizer",
+      "properties": {
+        "reactVisualizer.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh diagram when files change"
+        },
+        "reactVisualizer.includeNodeModules": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include components from node_modules in analysis"
+        },
+        "reactVisualizer.maxDepth": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum component tree depth to analyze"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "eslint": "^8.28.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.1.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.23.0",
+    "@babel/traverse": "^7.23.0",
+    "@babel/types": "^7.23.0",
+    "@types/babel__core": "^7.20.5"
+  }
+}
