@@ -52,6 +52,15 @@ export class VisualizerPanel {
   }
 
   public updateVisualization(data : AnalysisResult) {
+    // Log debug information to VS Code console
+    if (data.debug) {
+      console.log('=== React Visualizer Debug Info ===');
+      console.log('Files analyzed:', data.debug.filesAnalyzed);
+      console.log('Components found:', data.debug.componentsFound);
+      console.log('Parse errors:', data.debug.parseErrors);
+      console.log('Analysis log:', data.debug.analysisLog);
+    }
+
     this
       ._panel
       .webview
@@ -252,6 +261,11 @@ export class VisualizerPanel {
         </div>
         
         <div class="sidebar">
+            <div id="debug-info" style="margin-bottom: 20px; padding: 12px; background: #4b5563; border-radius: 4px; font-family: monospace; font-size: 10px;">
+                <h3 style="margin: 0 0 8px 0; color: #fbbf24;">Debug Info</h3>
+                <div id="debug-content">Waiting for analysis...</div>
+            </div>
+            
             <div>
                 <h3>Data Flows</h3>
                 <div id="flows-list"></div>
@@ -346,8 +360,39 @@ export class VisualizerPanel {
             document.getElementById('error').style.display = 'none';
             document.getElementById('visualization').style.display = 'block';
 
+            // Update debug info
+            if (data.debug) {
+                const debugContent = document.getElementById('debug-content');
+                const logEntries = data.debug.analysisLog.slice(-10).map(log => 
+                    '<div style="color: #d1d5db;">' + log + '</div>'
+                ).join('');
+                
+                debugContent.innerHTML = 
+                    '<div style="color: #10b981;">✓ Files: ' + data.debug.filesAnalyzed.length + '</div>' +
+                    '<div style="color: #10b981;">✓ Components: ' + data.debug.componentsFound.length + '</div>' +
+                    '<div style="color: #ef4444;">✗ Errors: ' + data.debug.parseErrors.length + '</div>' +
+                    '<div style="margin-top: 8px; max-height: 100px; overflow-y: auto;">' + logEntries + '</div>';
+                
+                // Log to browser console for detailed debugging
+                console.log('Debug Info:', data.debug);
+            }
+
             if (!svg) {
                 initializeVisualization();
+            }
+
+            if (data.components.length === 0) {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').innerHTML = 
+                    '<h3>No Components Found</h3>' +
+                    '<p>Check the debug info above for details.</p>' +
+                    '<p>Common issues:</p>' +
+                    '<ul style="text-align: left; display: inline-block;">' +
+                        '<li>Component names must start with uppercase</li>' +
+                        '<li>Components must return JSX</li>' +
+                        '<li>Check console for parse errors</li>' +
+                    '</ul>';
+                return;
             }
 
             renderComponents(data.components);
@@ -521,10 +566,10 @@ export class VisualizerPanel {
                         const isContextFlow = flow.type === 'context-provider-to-consumer';
                         
                         flowGroup.append('path')
-                            .attr('d', \`M \${fromPos.x} \${fromPos.y} 
-                                       C \${fromPos.x + 40} \${fromPos.y} 
-                                         \${toPos.x - 40} \${toPos.y} 
-                                         \${toPos.x} \${toPos.y}\`)
+                            .attr('d', 'M ' + fromPos.x + ' ' + fromPos.y + 
+                                     ' C ' + (fromPos.x + 40) + ' ' + fromPos.y + 
+                                     ' ' + (toPos.x - 40) + ' ' + toPos.y + 
+                                     ' ' + toPos.x + ' ' + toPos.y)
                             .attr('fill', 'none')
                             .attr('stroke', color)
                             .attr('stroke-width', 2)
@@ -556,25 +601,25 @@ export class VisualizerPanel {
 
             const uniqueFlows = [...new Set(data.flows.map(f => f.id))];
             
-            flowsList.innerHTML = uniqueFlows.map(flowId => \`
-                <div class="flow-item \${selectedFlow === flowId ? 'selected' : ''}" onclick="selectFlow('\${flowId}')">
-                    <div class="flow-header">
-                        <div class="flow-color" style="background: \${getFlowColor(flowId)};"></div>
-                        <div class="flow-name">\${flowId}</div>
-                    </div>
-                    <div class="flow-description">\${flowDescriptions[flowId] || 'Data flow connection'}</div>
-                </div>
-            \`).join('');
+            flowsList.innerHTML = uniqueFlows.map(flowId => 
+                '<div class="flow-item ' + (selectedFlow === flowId ? 'selected' : '') + '" onclick="selectFlow(\'' + flowId + '\')">' +
+                    '<div class="flow-header">' +
+                        '<div class="flow-color" style="background: ' + getFlowColor(flowId) + ';"></div>' +
+                        '<div class="flow-name">' + flowId + '</div>' +
+                    '</div>' +
+                    '<div class="flow-description">' + (flowDescriptions[flowId] || 'Data flow connection') + '</div>' +
+                '</div>'
+            ).join('');
 
             // Update conflicts
             if (data.conflicts && data.conflicts.length > 0) {
-                conflictsList.innerHTML = data.conflicts.map(conflict => \`
-                    <div style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 4px; padding: 8px; margin: 8px 0;">
-                        <div style="color: #fca5a5; font-size: 12px; font-weight: 500;">\${conflict.id}</div>
-                        <div style="color: #fecaca; font-size: 10px; margin-top: 4px;">\${conflict.description}</div>
-                        <div style="color: #fca5a5; font-size: 10px; margin-top: 4px;">\${conflict.items.length} items involved</div>
-                    </div>
-                \`).join('');
+                conflictsList.innerHTML = data.conflicts.map(conflict => 
+                    '<div style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 4px; padding: 8px; margin: 8px 0;">' +
+                        '<div style="color: #fca5a5; font-size: 12px; font-weight: 500;">' + conflict.id + '</div>' +
+                        '<div style="color: #fecaca; font-size: 10px; margin-top: 4px;">' + conflict.description + '</div>' +
+                        '<div style="color: #fca5a5; font-size: 10px; margin-top: 4px;">' + conflict.items.length + ' items involved</div>' +
+                    '</div>'
+                ).join('');
             } else {
                 conflictsList.innerHTML = '<div style="color: #9ca3af; font-size: 12px; text-align: center;">No conflicts detected</div>';
             }
