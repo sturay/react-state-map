@@ -34,9 +34,18 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showInformationMessage('Analyzing React components...');
                 
                 const targetPath = uri ? uri.fsPath : workspaceFolder.uri.fsPath;
+                console.log('Analyzing path:', targetPath);
+                
                 const analysisResult = await analyzer.analyzeReactProject(targetPath);
                 
+                console.log('Analysis complete:', {
+                    components: analysisResult.components.length,
+                    flows: analysisResult.flows.length,
+                    conflicts: analysisResult.conflicts.length
+                });
+                
                 if (currentPanel) {
+                    console.log('Sending data to webview...');
                     currentPanel.updateVisualization(analysisResult);
                 }
 
@@ -45,7 +54,8 @@ export function activate(context: vscode.ExtensionContext) {
                 );
 
             } catch (error) {
-                vscode.window.showErrorMessage(`Error: ${error}`);
+                console.error('Analysis error:', error);
+                vscode.window.showErrorMessage(`Error analyzing React components: ${error}`);
             }
         }
     );
