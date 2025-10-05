@@ -72,7 +72,7 @@ export class ReactAnalyzer {
         this.debugInfo.analysisLog.push(`Found ${reactFiles.length} React files`);
         
         const components: ComponentData[] = [];
-        const flows: DataFlow[] = [];
+        const componentMap = new Map<string, ComponentData>(); // componentName -> ComponentData
 
         for (const filePath of reactFiles) {
             this.debugInfo.filesAnalyzed.push(filePath);
@@ -80,6 +80,11 @@ export class ReactAnalyzer {
                 this.debugInfo.analysisLog.push(`Analyzing file: ${filePath}`);
                 const fileComponents = await this.analyzeFile(filePath);
                 components.push(...fileComponents);
+                
+                // Build component map for flow analysis
+                fileComponents.forEach(comp => {
+                    componentMap.set(comp.name, comp);
+                });
                 
                 fileComponents.forEach(comp => {
                     this.debugInfo.componentsFound.push(`${comp.name} (${comp.items.length} items)`);
@@ -93,14 +98,17 @@ export class ReactAnalyzer {
 
         this.debugInfo.analysisLog.push(`Total components found: ${components.length}`);
 
-        // For now, create some basic flows between components that share similar prop names
-        const generatedFlows = this.generateBasicFlows(components);
-        flows.push(...generatedFlows);
+        // Analyze JSX usage to find actual prop flows
+        const flows = await this.analyzeJSXFlows(reactFiles, componentMap);
+        this.debugInfo.analysisLog.push(`Generated ${flows.length} flows from JSX analysis`);
+
+        // Detect conflicts
+        const conflicts = this.detectConflicts(components, flows);
 
         return {
             components: this.layoutComponents(components),
             flows,
-            conflicts: [],
+            conflicts,
             debug: this.debugInfo
         };
     }
@@ -109,7 +117,11 @@ export class ReactAnalyzer {
         const reactFiles: string[] = [];
         
         const scanDirectory = (dirPath: string) => {
-            if (dirPath.includes('node_modules') || dirPath.includes('.next') || dirPath.includes('.git')) return;
+            if (dirPath.includes('node_modules') || 
+                dirPath.includes('.git') || 
+                dirPath.includes('.next') || 
+                dirPath.includes('media') || 
+                dirPath.includes('out')) return;
             
             try {
                 const items = fs.readdirSync(dirPath);
@@ -160,9 +172,9 @@ export class ReactAnalyzer {
 
             // First pass: collect imports
             traverse(ast, {
-                ImportDeclaration: (path:any) => {
+                ImportDeclaration: (path) => {
                     const source = path.node.source.value;
-                    path.node.specifiers.forEach((spec:any) => {
+                    path.node.specifiers.forEach(spec => {
                         if (t.isImportDefaultSpecifier(spec) || t.isImportSpecifier(spec)) {
                             const localName = spec.local.name;
                             // Resolve relative imports
@@ -835,6 +847,163 @@ export class ReactAnalyzer {
 
         this.debugInfo.analysisLog.push(`Extracted ${props.length} props for ${componentName}: [${props.join(', ')}]`);
         return props;
+    }
+
+    private async analyzeJSXFlows(
+        reactFiles: string[], 
+        componentMap: Map<string, ComponentData>
+    ): Promise<DataFlow[]> {
+        const flows: DataFlow[] = [];
+        const flowIdCounter = new Map<string, number>();
+
+        for (const filePath of reactFiles) {
+            try {
+                const code = fs.readFileSync(filePath, 'utf-8');
+                const ast = parse(code, {
+                    sourceType: 'module',
+                    plugins: ['jsx', 'typescript', 'decorators-legacy', 'classProperties']
+                });
+
+                // Find JSX element usage
+                traverse(ast, {
+                    JSXElement: (path: any) => {
+                        const openingElement = path.node.openingElement;
+                        if (t.isJSXIdentifier(openingElement.name)) {
+                            const componentName = openingElement.name.name;
+                            
+                            // Only process if it's a known component (starts with uppercase)
+                            if (!/^[A-Z]/.test(componentName)) return;
+                            
+                            const childComponent = componentMap.get(componentName);
+                            if (!childComponent) return;
+
+                            // Find parent component
+                            let parentComponent: ComponentData | undefined;
+                            let currentPath = path.parentPath;
+                            
+                            while (currentPath) {
+                                const node = currentPath.node;
+                                if (t.isFunctionDeclaration(node) && node.id) {
+                                    parentComponent = componentMap.get(node.id.name);
+                                    break;
+                                } else if (t.isVariableDeclarator(node) && t.isIdentifier(node.id)) {
+                                    parentComponent = componentMap.get(node.id.name);
+                                    break;
+                                }
+                                currentPath = currentPath.parentPath;
+                            }
+
+                            if (!parentComponent) return;
+
+                            this.debugInfo.analysisLog.push(
+                                `Found JSX: ${parentComponent.name} renders ${childComponent.name}`
+                            );
+
+                            // Analyze props being passed
+                            openingElement.attributes.forEach((attr: any) => {
+                                if (!t.isJSXAttribute(attr)) return;
+                                if (!t.isJSXIdentifier(attr.name)) return;
+                                if (!parentComponent) return; // Guard clause
+
+                                const propName = attr.name.name;
+                                const propValue = attr.value;
+
+                                // Find matching items in parent and child
+                                const childPropItem = childComponent.items.find(
+                                    item => item.name === propName && (item.type === 'prop' || item.type === 'prop-function')
+                                );
+
+                                if (!childPropItem) return;
+
+                                // Try to find what's being passed
+                                let parentItem: ComponentItem | undefined;
+
+                                if (t.isJSXExpressionContainer(propValue)) {
+                                    const expr = propValue.expression;
+                                    
+                                    // Direct identifier: <Child prop={value} />
+                                    if (t.isIdentifier(expr)) {
+                                        const valueName = expr.name;
+                                        parentItem = parentComponent.items.find(
+                                            item => item.name === valueName
+                                        );
+                                    }
+                                    // Member expression: <Child prop={this.state.value} />
+                                    else if (t.isMemberExpression(expr) && t.isIdentifier(expr.property)) {
+                                        const valueName = expr.property.name;
+                                        parentItem = parentComponent.items.find(
+                                            item => item.name === valueName
+                                        );
+                                    }
+                                }
+
+                                if (parentItem) {
+                                    const flowId = `${propName}-flow`;
+                                    const flowType = this.determineFlowType(parentItem.type, childPropItem.type);
+
+                                    flows.push({
+                                        id: flowId,
+                                        fromItem: parentItem.id,
+                                        toItem: childPropItem.id,
+                                        type: flowType
+                                    });
+
+                                    this.debugInfo.analysisLog.push(
+                                        `  Flow: ${parentComponent.name}.${parentItem.name} → ${childComponent.name}.${propName}`
+                                    );
+                                }
+                            });
+                        }
+                    }
+                });
+
+            } catch (error) {
+                this.debugInfo.analysisLog.push(`Error analyzing JSX flows in ${filePath}: ${error}`);
+            }
+        }
+
+        return flows;
+    }
+
+    private determineFlowType(fromType: string, toType: string): string {
+        if (fromType === 'state' && toType === 'prop') return 'state-to-prop';
+        if (fromType === 'setter' && toType === 'prop-function') return 'setter-to-prop';
+        if (fromType === 'function' && toType === 'prop-function') return 'function-to-prop';
+        if (fromType === 'prop' && toType === 'prop') return 'prop-to-prop';
+        if (fromType === 'context-provider') return 'context-provider-to-consumer';
+        return 'data-flow';
+    }
+
+    private detectConflicts(components: ComponentData[], flows: DataFlow[]): ConflictData[] {
+        const conflicts: ConflictData[] = [];
+        
+        // Find props that have same name as context consumers in same component
+        components.forEach(component => {
+            const props = component.items.filter(item => item.type === 'prop');
+            const contextConsumers = component.items.filter(item => item.type === 'context-consumer');
+            
+            props.forEach(prop => {
+                const similarContext = contextConsumers.find(ctx => {
+                    // Remove common suffixes/prefixes to compare
+                    const propBase = prop.name.replace(/^(get|set|use)/, '').toLowerCase();
+                    const ctxBase = ctx.name.replace(/^(get|set|use)|\(\)$/g, '').toLowerCase();
+                    return propBase === ctxBase || propBase.includes(ctxBase) || ctxBase.includes(propBase);
+                });
+
+                if (similarContext) {
+                    const conflictId = `${component.name}-${prop.name}-conflict`;
+                    if (!conflicts.find(c => c.id === conflictId)) {
+                        conflicts.push({
+                            id: conflictId,
+                            description: `${component.name} receives "${prop.name}" via both props and context`,
+                            items: [prop.id, similarContext.id]
+                        });
+                    }
+                }
+            });
+        });
+
+        return conflicts;
     }
 
     private generateBasicFlows(components: ComponentData[]): DataFlow[] {

@@ -78,27 +78,12 @@ export class VisualizerPanel {
   }
 
   public updateVisualization(data : AnalysisResult) {
-    // Log debug information to VS Code console
-    console.log('=== updateVisualization called ===');
-    console.log('Panel exists:', !!this._panel);
-    console.log('Webview exists:', !!this._panel
-      ?.webview);
-    console.log('Webview ready:', this._webviewReady);
-
-    if (data.debug) {
-      console.log('=== React Visualizer Debug Info ===');
-      console.log('Files analyzed:', data.debug.filesAnalyzed.length);
-      console.log('Components found:', data.debug.componentsFound.length);
-    }
-
     // Serialize data to ensure it's JSON-safe (no circular references, functions,
     // etc.)
     let serializedData;
     try {
       serializedData = JSON.parse(JSON.stringify(data));
-      console.log('Data serialized successfully', serializedData);
     } catch (error) {
-      console.error('Error serializing data:', error);
       vscode
         .window
         .showErrorMessage('Failed to serialize visualization data');
@@ -198,14 +183,23 @@ export class VisualizerPanel {
         }
 
         .container {
-            display: flex;
-            width: 100%;
-            height: 100%;
+          display: grid;
+          width: 100%;
+          height: 100%;
+          grid-template-rows: 4.5rem 1fr;
+          grid-template-columns: 1fr 200px;
         }
 
         .visualization-area {
             flex: 1;
             position: relative;
+        }
+
+        .visualization-area > .svg {
+          display: block;
+          width: max-width;
+          height: max-height;
+          overflow: auto;
         }
 
         .header {
@@ -442,7 +436,9 @@ export class VisualizerPanel {
 
         const vscode = acquireVsCodeApi();
         
-        let currentData, selectedFlow, svg;
+        let currentData = null;
+        let selectedFlow = null;
+        let svg = null;
 
         // Initialize visualization
         function initializeVisualization() {
@@ -742,25 +738,25 @@ export class VisualizerPanel {
 
             const uniqueFlows = [...new Set(data.flows.map(f => f.id))];
             
-            flowsList.innerHTML = uniqueFlows.map(flowId => 
-                '<div class="flow-item ' + (selectedFlow === flowId ? 'selected' : '') + '" onclick="selectFlow(\'' + flowId + '\')">' +
+            flowsList.innerHTML = uniqueFlows.map(function(flowId) {
+                return '<div class="flow-item ' + (selectedFlow === flowId ? 'selected' : '') + '" onclick="selectFlow(&quot;' + flowId + '&quot;)">' +
                     '<div class="flow-header">' +
                         '<div class="flow-color" style="background: ' + getFlowColor(flowId) + ';"></div>' +
                         '<div class="flow-name">' + flowId + '</div>' +
                     '</div>' +
                     '<div class="flow-description">' + (flowDescriptions[flowId] || 'Data flow connection') + '</div>' +
-                '</div>'
-            ).join('');
+                '</div>';
+            }).join('');
 
             // Update conflicts
             if (data.conflicts && data.conflicts.length > 0) {
-                conflictsList.innerHTML = data.conflicts.map(conflict => 
-                    '<div style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 4px; padding: 8px; margin: 8px 0;">' +
+                conflictsList.innerHTML = data.conflicts.map(function(conflict) {
+                    return '<div style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 4px; padding: 8px; margin: 8px 0;">' +
                         '<div style="color: #fca5a5; font-size: 12px; font-weight: 500;">' + conflict.id + '</div>' +
                         '<div style="color: #fecaca; font-size: 10px; margin-top: 4px;">' + conflict.description + '</div>' +
                         '<div style="color: #fca5a5; font-size: 10px; margin-top: 4px;">' + conflict.items.length + ' items involved</div>' +
-                    '</div>'
-                ).join('');
+                    '</div>';
+                }).join('');
             } else {
                 conflictsList.innerHTML = '<div style="color: #9ca3af; font-size: 12px; text-align: center;">No conflicts detected</div>';
             }
@@ -819,7 +815,7 @@ export class VisualizerPanel {
         });
         
         console.log('Webview initialized and ready to receive data');
-        })(); // end IIFE
+        }})(); // end IIFE
     </script>
 </body>
 </html>`;
