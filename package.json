@@ -1,11 +1,10 @@
 {
   "name": "react-component-visualizer",
-  "author": "Stuart Harding <sturayharding@gmail.com>",
   "displayName": "React Component Visualizer",
-  "description": "Visualize React component relationships, state flow, props, and context with interactive D3 diagrams",
-  "version": "0.0.1",
+  "description": "Visualize React component relationships, state flow, props, and context with interactive diagrams",
+  "version": "0.1.2",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Other",
@@ -97,6 +96,7 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@types/babel__traverse": "^7.28.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "16.x",
     "@types/vscode": "^1.74.0",
@@ -111,7 +111,12 @@
   "dependencies": {
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.0",
-    "@babel/types": "^7.23.0",
-    "@types/babel__core": "^7.20.5"
-  }
+    "@babel/types": "^7.23.0"
+  },
+  "files": [
+    "out/**/*",
+    "media/**/*",
+    "package.json",
+    "README.md"
+  ]
 }
