@@ -2,7 +2,7 @@
   "name": "react-component-visualizer",
   "displayName": "React Component Visualizer",
   "description": "Visualize React component relationships, state flow, props, and context with interactive diagrams",
-  "version": "0.0.27",
+  "version": "0.1.2",
   "engines": {
     "vscode": "^1.85.0"
   },
